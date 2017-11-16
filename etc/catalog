@@ -1,0 +1,5 @@
+inv_4bits               C
+mux_4bits               C
+acc_4bits               C
+somador_1bit            C
+somador_4bits_acc_model C
