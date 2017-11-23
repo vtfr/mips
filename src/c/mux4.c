@@ -4,6 +4,19 @@
 
 static int current = 0;
 
+/*
+ * Função que simula o comportamento do Mux4
+ */
+int Mux4(int a, int b, int c, int d, int ctrl) {
+	switch (ctrl) {
+	default:
+	case 0: return a;
+	case 1: return b;
+	case 2: return c;
+	case 3: return d;
+	}
+}
+
 int main(void) {
 	DEF_GENPAT("mux4");
 
@@ -36,10 +49,11 @@ int main(void) {
  	for (int d = 0; d < sizeof valoresDeTeste; d++)
  	for (int ctrl = 0; ctrl < 4; ctrl++) {
 		// Avalia o resultado do mux
-		const int s = ctrl == 0 ? valoresDeTeste[a]
-		            : ctrl == 1 ? valoresDeTeste[b]
-		            : ctrl == 2 ? valoresDeTeste[c]
-		            :             valoresDeTeste[d];
+		const int s = Mux4(ctrl,
+			valoresDeTeste[a],
+			valoresDeTeste[b],
+			valoresDeTeste[c],
+			valoresDeTeste[d]);
 
 		AFFECT(IntToStr(current), "Ctrl", IntToStr(ctrl));
 

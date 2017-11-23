@@ -4,6 +4,22 @@
 
 static int current = 0;
 
+/*
+ * Função que simula o comportamento do registrador
+ */
+int Registrador(int* estado, int valor, int enable, int reset, int clk, int aclk) {
+	if (clk == 1 && clk != aclk) {
+		if (reset) {
+			*estado = 0;
+		} else if (enable) {
+			*estado = valor;
+		}
+	}
+
+	return *estado;
+}
+
+
 // Reseta o registrador
 void ResetaRegistrador(void) {
 	LABEL("Reset")

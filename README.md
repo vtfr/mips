@@ -7,6 +7,33 @@ A arquitetura *MIPS*, que significa *Microprocessor without Interlocked Pipeline
 
 Neste relatório exploraremos um pouco do subconjunto MIPS definido no livro **Computer Organization and Design, MIPS Edition** (ISBN: 978-0124077263), por David A. Patterson e‎ John L. Hennessy, implementando-a em *VHDL* com suite de testes em C, usando o pacote *Alliance*.
 
+### Organização do Projeto
+
+A organização do código foi feita de acordo com o livro **A Top Down Approach To IC Design** (ISBN: 9780128007723), por Chris Browy, Glenn Gullikson e Mark Indovina, onde temos a seguinte estruturação do código:
+
+* `bin`: Arquivos binários e scripts para a automatização das etapas de produção e verificação do circuito
+* `etc`: Arquivos de configuração do simulador
+* `include`: Arquivos de código compartilhados
+* `src`: Arquivos de código
+  * `c`: Código em C
+  * `vhdl`: Código em VHDL
+* `test`: Arquivos resultantes de testes, como tabelas verdade
+* `work`: Arquivos sendo trabalhados por scripts
+
+O código completo assim como uma cópia desse documento podem ser obtidas no link https://github.com/vtfr/mips.
+
+### Documentação do Projeto
+
+A Documentação do código está escrita no próprio código através de comentários antes de cada operação importante. Para fins de conveniência os trechos mais importantes de código serão copiados e colados aqui conforme a necessidade deles.
+
+### Teste
+
+O teste do código pode ser feito executando o seguinte comando no diretório raiz do projeto:
+
+```
+$ make test
+```
+
 ## RISC
 
 Uma arquitetura *RISC*, isto é, *Reduced Instruction Set Computer*, **Computador com Conjunto Reduzido de Instruções**, consiste em uma arquitetura em que as operações serão realizadas apenas em registradores e sem microcódigo, portanto. Por ser baseado em registrador, qualquer operação com um dado na memória deve ser primeiro carregada em um registrador por uma instrução de busca para só depois ser processado, diferente dos CISCs como o x86, que podem fazer a busca na memória, processamento e escrita implicitamente em uma só instrução.
@@ -37,55 +64,88 @@ Agora que entendemos o conceito de byte mais significativo, existem duas formas 
 
 No caso do nosso processador MIPS, é usado a ordenação **Big-Endian**.
 
+## Registradores
+
+O MIPS possui 32 registradores de 32 bits cada, entre os quais o primeiro, chamado de `$s0` é fixo no valor zero, isto é, não pode ser sobrescrito, apenas lido.
+
+Por ser uma arquitetura **RISC**, todas as operações devem ser feitas em função dos registradores, que são a base dessa arquitetura.
+
+A lógica dos registradores está descrita no arquivo [`regfile.vhdl`](src/vhdl/regfile.vhdl), sendo validada pelo arquivo [`regfile.c`](src/c/regfile.c) que gera a suite de testes.
+
 ## Instruções
 
-As instruções do processador MIPS estudado são divididas em três categorias: **Tipo R**, **Tipo I** e **Tipo J**.
+### Listagem
+
+As instruções do subset MIPS que trabalharemos são as seguintes:
+
+| Categoria          | Instrução                          | Exemplo              | Comentário                                                          |
+|--------------------|------------------------------------|----------------------|---------------------------------------------------------------------|
+| Aritmetica         | add                                | `add $s1, $s2, $s3 ` | Adiciona `$s3` a $s2` e armazena o resultado em `$s1`               |
+| Aritmetica         | sub                                | `sub $s1, $s2, $s3`  | Subtrai `$s3` de $s2` e armazena o resultado em `$s1`               |
+| Dados     | Lê palavra      | `lw $s1, L($2)`  | Lê a palavra no endereço `$s2 + L` para `$s1` |
+| Dados     | Escreve Palavra | `sw $s1, L($s2)` | Escreve a palavra `$s1` no endereço `$s2 + L` |
+| Lógica             | and                                | `and $s1, $s2, $s3`  | Realiza AND em `$s2` e `$s3` e armazena o resultado em `$s1`        |
+| Lógica             | or                                 | `or $s1, $s2, $s3`   | Realiza OR em `$s2` e `$s3` e armazena o resultado em `$s1`         |
+| Lógica             | nor                                | `nor $s1, $s2, $s3`  | Realiza NOR em `$s2` e `$s3` e armazena o resultado em `$s1`        |
+| Lógica             | and imediato                       | `andi $s1, $s2, L`   | Realiza OR em `$s2` e `L` e armazena o resultado em `$s1`           |
+| Lógica             | or imediato                        | `ori $s1, $s2, L`    | Realiza OR em `$s2` e `L` e armazena o resultado em `$s1`           |
+| Lógica             | shift pra esquerda                 | `sll $s1, $s2, 10`   | Realiza shift em `$s2` por `10` para a esquerda e armazena em `$s1` |
+| Lógica             | shift pra direita                  | `srl $s1, $s2, 10`   | Realiza shift em `$s2` por `10` para a direita e armazena em `$s1`  |
+| Branching          | branch caso igual                  | `beq $s1, $s2, L`    | Pula para endereço `L` se `$s1 == $s2`                              |
+| Branching          | branch caso não igual              | `bne $s1, $s2, L`    | Pula para endereço `L` se `$s1 != $s2`                              |
+| Branching          | atribui teste se negativo          | `slt $s1, $s2, $s3`  | Atribui `1` em `$s1` caso `$s2 < $s3`. Caso contrário atribui `0`   |
+| Branching          | atribui teste se negativo imediato | `slt $s1, $s2, 100`  | Atribui `1` em `$s1` caso `$s2 < 100`. Caso contrário atribui `0`   |
+| Jump Incondicional | jump                               | `jump L`             | Pula para o endereço `L`                                            |
+
+As instruções do processador MIPS estudado são divididas em três categorias: **Tipo R**, **Tipo I** e **Tipo J**, que são relacionadas a forma como a instrução é armazenada na memória, isto é, seu formato binário.
 
 ### Tipo R
 
-As instruções Tipo R são
+As instruções tipo R são caracterizadas por usarem três registradores: sendo dois para entrada de dados e um para armazenamento. São divididas em seis campo:
+
+* O número inteiro equivalente ao operador, chamado `op`;
+* O número do registrador de saída `rs`;
+* O número do registrador de entrada `rt`;
+* O número do registrador de entrada `rd`;
+* O shift para esquerda `shamt` (usado para operações com shift).
+* A função `funct` que é enviada a ULA como complemento ao operador;
+
+| Operador `op` | Registrador Saída `rs` | Registrador Entrada 1 `rt` | Registrador Entrada 2 `rd` | Shift para esquerda `shamt` | Função `funct` |
+|---------------|------------------------|----------------------------|----------------------------|-----------------------------|----------------|
+| 6 bits        | 5 bits                 | 5 bits                     | 5 bits                     | 5 bits                      | 6 bits         |
+
+Todas as operações do tipo R possuem `op` zero, deixando a função específica que realizam para o parâmetro `funct`, como mostrado acima.
 
 
+### Tipo I
+
+As instruções do tipo I, chamadas de **imediatas**, são instruçẽos que, ao invés de terem dois registradores para entrada, possuem um registrador para entrada e um campo onde um inteiro será armazenado diretamente na instrução, para ser usado por ela, chamado `imm`, que possui 16 bits. A operação é determinada unicamente pelo opcode `op`, diferente das instruções do **Tipo R**.
+
+| Operador `op` | Registrador Saída `rs` | Registrador Entrada `rt` | Valor Imediato `imm` |
+|---------------|------------------------|--------------------------|----------------------|
+| 6 bits        | 5 bits                 | 5 bits                   | 16 bits              |
 
 
+### Tipo J
 
-### Diagrama do Somador/Subtrator de 4 Bits com Acumulador
+O tipo J é feito exclusivamente para instruções de salto incondicional `jump`, possuindo um inteiro `L` de 26 bits que representa a distância (positiva ou negativa) do salto em relação ao endereço da próxima instrução depois do `jump`.
 
-![Diagrama](schematic.png)
+| Operador `op` | Endereço `L` |
+|---------------|--------------|
+| 6 bits        | 26 bits      |
 
-O circuito possui apenas três entradas, que são a entrada de valores de 4 bits `A` e os os seletores de modo de operação `sel0` e `sel1`, com 1 bit cada, e duas saídas, que são a saída de 4 bits da operação atual `S` e o indicador de overflow
-`Cout`, que é ativado toda vez que uma operação resulta em um número maior que 4 bits.
+Devido ao fato de que no MIPS cada instrução possui 32 bits, ou seja, 4 bytes, todos os saltos devem ser alinhados à 4 bytes, de tal forma que as instruções se localizem nos endereços multiplos de 4. Sabendo disso e do fato de que todos os números múltiplos de 4 possuem os dois bits menos significativos `00`, o valor `L` é armazenado sem esses últimos dois bits, para garantir uma distância maior de salto possível. Lembrando que o shift para a esquerda é equivalente a multiplicação por quatro.
 
-| sel0 | sel1 | Resposta                         | Operação         |
-|------|------|----------------------------------|------------------|
-| 0    | 0    | Copia A para ACC                 | `ACC <= A`       |
-| 0    | 1    | Soma A com ACC e grava em ACC    | `ACC <= ACC + A` |
-| 1    | 0    | Copia Inv(A) para ACC            | `ACC <= Inv(A)`  |
-| 1    | 1    | Subtrai A de ACC e grava em ACC  | `ACC <= ACC - A` |
+Também é necessário notar que o valor é complemento de dois, portanto não sendo possível somar dois valores complemento de dois de tamanho de bits diferentes e obter sempre um resultado correto. Para isso, é necessário extender o valor de 28 bits (26 bits de `L` mais os últimos `00`) para um valor de 32 bits, que, no MIPS, chamamos de `signextend`.
 
+O cálculo final para o endereço fica:
 
-### Organização do Projeto
+```
+PC := (PC + 4) + signextend(L << 2)
+```
 
-A organização do código foi feita de acordo com o livro *A Top Down Approach To IC Design*, escritp por Chris Browy, Glenn Gullikson e Mark Indovina, onde temos a seguinte estruturação do código:
+## Multi-Ciclo
 
-* `bin`: Arquivos binários e scripts para a automatização das etapas de produção e verificação do circuito
-* `etc`: Arquivos de configuração do simulador
-* `include`: Arquivos de código compartilhados
-* `src`: Arquivos de código
-  * `c`: Código em C
-  * `vhdl`: Código em VHDL
-* `test`: Arquivos resultantes de testes, como tabelas verdade
-* `work`: Arquivos sendo trabalhados por scripts
+A arquitetura Multi-Ciclo é uma otimização a nível de hardware que permite a reutilização de componentes através da execução de instruções em ciclos menores. Cada instrução será dividida em uma série de etapas que serão executadas em vários ciclos menores, possibilitando que componentes que normalmente estariam ociosos e teriam de ser duplicados para funcionarem em um ciclo só possam ser reaproveitados para executar determinadas tarefas da instrução.
 
-
-### Documentação do Projeto
-
-A Documentação do código está escrita no próprio código através de comentários antes de cada operação importante. Para fins de conveniência os trechos mais importantes de código serão copiados e colados aqui conforme a necessidade deles.
-
-
-## Modelo de Referência de Ouro
-
-O Modelo de Referência de Ouro, do inglês *Golden Reference Model*, trata-se de um modelo de referência em alto nível de um dado circuito capaz de descrever seu comportamento, isto é, suas saídas, em função das suas entradas. Esse modelo é
-usado para produzir um vetor de casos de teste que exaustivamente compara se o resultado produzido pelo circuito está de acordo com o vetor de testes gerado.
-
-Neste trabalho, fizemos um modelo em alto-nível em C99, que, uma vez executado, gera os vários vetores de teste para cada um dos componentes do circuito.
+Para isso, é necessário ter uma unidade de controle que é capaz de armazenar o estado atual durante vários ciclos e controlar o comportamento dos outros componentes, chamada de controle. O controle é uma **Máquina Finita de Estados** (FSM) que está descrita em [controle.vhdl](src/vhdl/control.vhdl) e pode ser validada em [control.c](src/c/control.c).

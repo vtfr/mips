@@ -58,7 +58,6 @@ typedef struct {
 	IRWrite     unsigned :1;
 	MemWrite    unsigned :1;
 	MemRead     unsigned :1;
-	PCWrite     unsigned :1;
 
 	// Estado
 	State ControlState;
@@ -67,7 +66,7 @@ typedef struct {
 /*
  * Define qual será o próximo estado do controle
  */
-Control ProximoEstadoControle(Control atual) {
+Control ProximoEstadoControle(Control atual, int opcode, int func) {
 	Control proximo = atual;
 
 	switch (atual.State) {
@@ -87,7 +86,7 @@ Control ProximoEstadoControle(Control atual) {
 		proximo.ALUSrcB = 2;
 		proximo.ALUOp   = 0;
 
-		switch (atual.Opcode) {
+		switch (opcode) {
 		case 35: proximo.State = CONTROL_MEMADDR;     break;
 		case 43: proximo.State = CONTROL_MEMADDR;     break;
 		case 0:  proximo.State = CONTROL_EXECUTE;     break;
@@ -125,7 +124,7 @@ Control ProximoEstadoControle(Control atual) {
 		proximo.ALUSrcB = 0;
 		proximo.ALUOp = 2;
 
-		switch (atual.Funct) {
+		switch (funct) {
 		case 32: proximo.AluCtrl = 2; break;
 		case 34: proximo.AluCtrl = 6; break;
 		case 36: proximo.AluCtrl = 0; break;
@@ -173,7 +172,106 @@ Control ProximoEstadoControle(Control atual) {
 	return proximo;
 }
 
+/*
+ * Envia os resultados do controle para o pat
+ */
+void AffectControle(Controle controle) {
+	AFFECT(IntToStr(current), "Clk",   "0");
+	AFFECT(IntToStr(current), "Reset", "0");
 
+	AFFECT(IntToStr(current), "MemToReg",    IntToStr(controle.MemToReg));
+	AFFECT(IntToStr(current), "IOrD",        IntToStr(controle.IOrD));
+	AFFECT(IntToStr(current), "PCSource",    IntToStr(controle.PCSource));
+	AFFECT(IntToStr(current), "RegDest",     IntToStr(controle.RegDest));
+	AFFECT(IntToStr(current), "ALUOp",       IntToStr(controle.AluOp));
+	AFFECT(IntToStr(current), "ALUSrcA",     IntToStr(controle.AluSrcA));
+	AFFECT(IntToStr(current), "ALUSrcB",     IntToStr(controle.AluSrcB));
+	AFFECT(IntToStr(current), "ALUCtrl",     IntToStr(controle.AluCtrl));
+	AFFECT(IntToStr(current), "PCWrite",     IntToStr(controle.PCWrite));
+	AFFECT(IntToStr(current), "PCWriteCond", IntToStr(controle.PCWriteCond));
+	AFFECT(IntToStr(current), "IRWrite",     IntToStr(controle.IRWrite));
+	AFFECT(IntToStr(current), "MemWrite",    IntToStr(controle.MemWrite));
+	AFFECT(IntToStr(current), "MemRead",     IntToStr(controle.MemRead));
+	current += ATRASO;
+}
+
+Controle ResetControle() {
+	Controle controle = { 0 };
+	controle.AluSrcB = 1;
+	controle.IRWrite = 1;
+	controle.PCWrite = 1;
+
+	AFFECT(IntToStr(current), "Clk",   "0");
+	AFFECT(IntToStr(current), "Reset", "1");
+	current += ATRASO;
+
+	AFFECT(IntToStr(current), "Clk", "1");
+	AffectControle(controle, CONTROL_FETCH, 0);
+
+	return controle;
+}
+
+void main() {
+	DEF_GENPAT("control");
+
+	// Entrada
+	DECLAR("Clk",       ":1", "B", IN,  "", "");
+	DECLAR("Reset",     ":1", "B", IN,  "", "");
+
+	DECLAR("MemToReg",  ":1", "B", OUT, "", "");
+	DECLAR("RegDst",    ":1", "B", OUT, "", "");
+	DECLAR("IorD",      ":1", "B", OUT, "", "");
+	DECLAR("PCSrc",     ":1", "B", OUT, "(1 downto 0)", "");
+	DECLAR("ALUOP",     ":1", "B", OUT, "(1 downto 0)", "");
+	DECLAR("ALUSrcA",   ":1", "B", OUT, "", "");
+	DECLAR("ALUSrcB",   ":1", "B", OUT, "(1 downto 0)", "");
+	DECLAR("ALUCtrl",   ":1", "B", OUT, "(2 downto 0)", "");
+
+	DECLAR("IRWrite",   ":1", "B", OUT, "", "");
+	DECLAR("MemWrite",  ":1", "B", OUT, "", "");
+	DECLAR("PCWrite",   ":1", "B", OUT, "", "");
+	DECLAR("RegWrite",  ":1", "B", OUT, "", "");
+	DECLAR("Branch",    ":1", "B", OUT, "");
+
+	DECLAR("OPCode",    ":1", "B", IN,  "(6 downto 0)", "");
+	DECLAR("Funct",     ":1", "B", IN,  "(6 downto 0)",
+	DECLAR("State",     ":1", "B", IN,  "(3 downto 0)", "");
+
+	// Misc
+	DECLAR("vdd", ":1", "B", IN, "", "");
+	DECLAR("vss", ":1", "B", IN, "", "");
+	AFFECT("0", "vdd", "1");
+	AFFECT("0", "vss", "0");
+
+	Controle controle = ResetControle();
+
+	// Programa:
+	unsigned int programa[] = {
+		0b100011000000000000000000000000000,
+		0b101011000000000000000000000000000,
+		0b000000000000000000000000000100000,
+		0b000100000000000000000000000100001,
+		0b001001000000000000000000000000000,
+		0b000010000000000000000000000000000,
+	};
+
+	// Começa a rodar o programa
+	for (int i = 0; i < sizeof programa; i++) {
+		const struct {
+			unsigned int i;
+			union {
+				struct {
+					unsigned funct : 6
+					unsigned shamt : 6 
+				} R;
+			}
+		} instruction = programa[i];
+		const unsigned op =
+
+		ProximoEstadoControle
+	}
+	// Executa o programa e testa se as entradas estão em ordem;
+}
 
 
 #endif // CONTROL_STATE_H

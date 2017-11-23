@@ -4,6 +4,13 @@
 
 static int current = 0;
 
+/*
+ * Função que simula o comportamento do Mux2
+ */
+int Mux2(int a, int b, int ctrl) {
+	return ctrl == 0 ? a : b;
+}
+
 int main(void) {
 	DEF_GENPAT("mux2");
 
@@ -32,7 +39,7 @@ int main(void) {
 	for (int b = 0; b < sizeof valoresDeTeste; b++)
  	for (int ctrl = 0; ctrl < 4; ctrl++) {
 		// Avalia o resultado do mux
-		const int s = c == 0 ? valoresDeTeste[a] : valoresDeTeste[b];
+		const int s = Mux2(c, valorDeTeste[a], valorDeTeste[b]);
 
 		AFFECT(IntToStr(current), "Ctrl", IntToStr(ctrl));
 
