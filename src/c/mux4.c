@@ -7,7 +7,7 @@ static int current = 0;
 /*
  * Função que simula o comportamento do Mux4
  */
-int Mux4(int a, int b, int c, int d, int ctrl) {
+int Mux4(int ctrl, int a, int b, int c, int d) {
 	switch (ctrl) {
 	default:
 	case 0: return a;
@@ -21,13 +21,13 @@ int main(void) {
 	DEF_GENPAT("mux4");
 
 	// Entrada
-	DECLAR("A",    ":1", "B", IN,  "(31 downto 0)", "");
-	DECLAR("B",    ":1", "B", IN,  "(31 downto 0)", "");
-	DECLAR("C",    ":1", "B", IN,  "(31 downto 0)", "");
-	DECLAR("D",    ":1", "B", IN,  "(31 downto 0)", "");
-	DECLAR("Ctrl", ":1", "B", IN,  "(1 downto 0)", "");
+	DECLAR("A",    ":1", "X", IN,  "(31 downto 0)", "");
+	DECLAR("B",    ":1", "X", IN,  "(31 downto 0)", "");
+	DECLAR("C",    ":1", "X", IN,  "(31 downto 0)", "");
+	DECLAR("D",    ":1", "X", IN,  "(31 downto 0)", "");
+	DECLAR("Ctrl", ":1", "X", IN,  "(1 downto 0)", "");
 
-	DECLAR("S",    ":1", "B", OUT, "(31 downto 0)", "");
+	DECLAR("S",    ":1", "X", OUT, "(31 downto 0)", "");
 
 	// Misc
 	DECLAR("vdd", ":1", "B", IN, "", "");
@@ -43,10 +43,12 @@ int main(void) {
 		0x00000000, 0xFFFFFFFF, 0xAABBCCDD,
 		0x01010101, 0xCCCCCCCC };
 
-	for (int a = 0; a < sizeof valoresDeTeste; a++)
-	for (int b = 0; b < sizeof valoresDeTeste; b++)
-	for (int c = 0; c < sizeof valoresDeTeste; c++)
- 	for (int d = 0; d < sizeof valoresDeTeste; d++)
+	#define SIZE(x) (sizeof(x)/sizeof(x[0]))
+
+	for (int a = 0; a < SIZE(valoresDeTeste); a++)
+	for (int b = 0; b < SIZE(valoresDeTeste); b++)
+	for (int c = 0; c < SIZE(valoresDeTeste); c++)
+ 	for (int d = 0; d < SIZE(valoresDeTeste); d++)
  	for (int ctrl = 0; ctrl < 4; ctrl++) {
 		// Avalia o resultado do mux
 		const int s = Mux4(ctrl,
@@ -55,16 +57,15 @@ int main(void) {
 			valoresDeTeste[c],
 			valoresDeTeste[d]);
 
-		AFFECT(IntToStr(current), "Ctrl", IntToStr(ctrl));
+		SAFFECT(current, "Ctrl", ctrl);
 
-		AFFECT(IntToStr(current), "A", IntToStr(valoresDeTeste[a]));
-		AFFECT(IntToStr(current), "B", IntToStr(valoresDeTeste[b]));
-		AFFECT(IntToStr(current), "C", IntToStr(valoresDeTeste[c]));
-		AFFECT(IntToStr(current), "D", IntToStr(valoresDeTeste[d]));
-		AFFECT(IntToStr(current), "S", "*");
-		current += ATRASO;
+		SAFFECT(current, "A", valoresDeTeste[a]);
+		SAFFECT(current, "B", valoresDeTeste[b]);
+		SAFFECT(current, "C", valoresDeTeste[c]);
+		SAFFECT(current, "D", valoresDeTeste[d]);
+		current += PROPAG;
 
-		AFFECT(IntToStr(current), "S", IntToStr(s));
+		SAFFECT(current, "S", s);
  		current += ATRASO;
  	}
 

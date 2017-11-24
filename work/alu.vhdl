@@ -1,11 +1,12 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.all;
+use IEEE.STD_LOGIC_SIGNED.all;
 
 entity alu is
 port (
 	a, b  : in  STD_LOGIC_VECTOR(31 downto 0);
-	ctrl  : in  STD_LOGIC_VECTOR(2 downto 0);
 	s     : out STD_LOGIC_VECTOR(31 downto 0);
+	ctrl  : in  STD_LOGIC_VECTOR(2 downto 0);
     zero  : out STD_LOGIC;
 
 	vdd, vss: in STD_LOGIC

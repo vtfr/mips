@@ -1,9 +1,9 @@
-#ifndef CONTROL_STATE_H
-#define CONTROL_STATE_H
-
+#include <util.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+static unsigned current = 0;
 
 /*
  * Estados do controle
@@ -30,61 +30,62 @@ typedef enum {
 typedef struct {
 	// 0 => Escreve nos registradores o resultado da Alu
 	// 1 => Escreve nos registradores o valor do Memory Data Register
-	MemToReg    unsigned :1;
+	unsigned MemToReg :1;
 
+	// Define se será inscrito um valor entre os bits [15 - 0] ou [20 - 16]
+	// da instrução no registrador
+	unsigned RegDst :1;
+	
 	// Define se é é instrução ou data
-	IOrD unsigned :1;
+	unsigned IOrD :1;
 
 	// Define o que será escrito no PC
 	// 0 => Resultado da Alu
 	// 1 => Jump Address
 	// 2 => ShiftLeft2(Instruction [25 - 0]) + PC [31 - 28]
 	// 3 => Não usado
-	PCSource unsigned :2;
-
-	// Define se será inscrito um valor entre os bits [15 - 0] ou [20 - 16]
-	// da instrução no registrador
-	RegDest unsigned :1;
+	unsigned PCSrc :2;
 
 	// Informações para a Alu
-	AluOp   unsigned :1;
-	AluSrcA unsigned :2;
-	AluSrcB unsigned :2;
-	AluCtrl unsigned :3;
+	unsigned AluOp   :2;
+	unsigned AluSrcA :1;
+	unsigned AluSrcB :2;
+	unsigned AluCtrl :3;
 
 	// Flags responsáveis por habilitar escrita/leitura
-	PCWrite     unsigned :1;
-	PCWriteCond unsigned :1;
-	IRWrite     unsigned :1;
-	MemWrite    unsigned :1;
-	MemRead     unsigned :1;
+	unsigned IRWrite     :1;
+	unsigned MemWrite    :1;
+	unsigned RegWrite    :1;
+	unsigned PCWrite     :1;
+	unsigned Branch      :1;
 
 	// Estado
-	State ControlState;
+	ControlState State;
 } Control;
 
 /*
  * Define qual será o próximo estado do controle
  */
-Control ProximoEstadoControle(Control atual, int opcode, int func) {
+Control NextControlState(Control atual, int opcode, int func) {
 	Control proximo = atual;
 
 	switch (atual.State) {
+	default:
 	case CONTROL_FETCH:
 		proximo.State   = CONTROL_DECODE;
-		proximo.IorD    = 0;
-		proximo.ALUSrcA = 0;
-		proximo.ALUSrcB = 1;
-		proximo.ALUOp   = 0;
+		proximo.IOrD    = 0;
+		proximo.AluSrcA = 0;
+		proximo.AluSrcB = 1;
+		proximo.AluOp   = 0;
 		proximo.PCSrc   = 0;
 		proximo.IRWrite = 1;
 		proximo.PCWrite = 1;
 		break;
 
 	case CONTROL_DECODE:
-		proximo.ALUSrcA = 0;
-		proximo.ALUSrcB = 2;
-		proximo.ALUOp   = 0;
+		proximo.AluSrcA = 0;
+		proximo.AluSrcB = 3;
+		proximo.AluOp   = 0;
 
 		switch (opcode) {
 		case 35: proximo.State = CONTROL_MEMADDR;     break;
@@ -97,11 +98,12 @@ Control ProximoEstadoControle(Control atual, int opcode, int func) {
 		break;
 
 	case CONTROL_MEMADDR:
-		proximo.ALUSrcA = 1;
-		proximo.ALUSrcB = 2;
-		proximo.ALUOp   = 0;
+		proximo.AluSrcA = 1;
+		proximo.AluSrcB = 2;
+		proximo.AluOp   = 0;
 
-		switch (atual.Opcode) {
+		switch (opcode) {
+		default:
 		case 35: proximo.State = CONTROL_MEMREAD;  break;
 		case 43: proximo.State = CONTROL_MEMWRITE; break;
 		}
@@ -109,56 +111,65 @@ Control ProximoEstadoControle(Control atual, int opcode, int func) {
 
 	case CONTROL_MEMREAD:
 		proximo.State = CONTROL_MEMWRITEBACK;
-		proximo.IorD = 1;
+		proximo.IOrD = 1;
 		break;
+	
+	case CONTROL_MEMWRITEBACK:
+		proximo.State = CONTROL_FETCH;
 
+		proximo.RegDst = 0;
+		proximo.MemToReg = 1;
+		proximo.RegWrite = 1;
+		break;
+		
 	case CONTROL_MEMWRITE:
 		proximo.State = CONTROL_FETCH;
-		proximo.IorD = 1;
+		proximo.IOrD = 1;
 		proximo.MemWrite = 1;
 		break;
 
 	case CONTROL_EXECUTE:
 		proximo.State = CONTROL_ALUWRITEBACK;
-		proximo.ALUSrcA = 1;
-		proximo.ALUSrcB = 0;
-		proximo.ALUOp = 2;
+		proximo.AluSrcA = 1;
+		proximo.AluSrcB = 0;
+		proximo.AluOp = 2;
 
-		switch (funct) {
-		case 32: proximo.AluCtrl = 2; break;
+		switch (func) {
+		case 35: proximo.AluCtrl = 2; break;
 		case 34: proximo.AluCtrl = 6; break;
 		case 36: proximo.AluCtrl = 0; break;
 		case 37: proximo.AluCtrl = 1; break;
 		case 42: proximo.AluCtrl = 7; break;
+		default: proximo.AluCtrl = 0; break;
 		}
 		break;
 
 	case CONTROL_ALUWRITEBACK:
-		proximo.State = FETCH;
-		proximo.RegDest = 1;
+		proximo.State = CONTROL_FETCH;
+		proximo.RegDst = 1;
 		proximo.MemToReg = 0;
 		proximo.RegWrite = 1;
 		break;
 
 	case CONTROL_BRANCH:
 		proximo.State = CONTROL_FETCH;
-		proximo.ALUSrcA = 1;
-		proximo.AluSrcB = 0
-		proximo.ALUOp = 1;
+		proximo.AluSrcA = 1;
+		proximo.AluSrcB = 0;
+		proximo.AluOp = 1;
 		proximo.PCSrc = 1;
 		proximo.Branch = 1;
 		break;
 
 	case CONTROL_ADDIEXECUTE:
 		proximo.State = CONTROL_ADDIWRITEBACK;
-		proximo.ALUSrcA = 1;
-		proximo.ALUSrcB = 2;
-		proximo.ALUOp = 0;
+		proximo.AluSrcA = 1;
+		proximo.AluSrcB = 2;
+		proximo.AluOp = 0;
 		break;
 
 	case CONTROL_ADDIWRITEBACK:
 		proximo.State = CONTROL_FETCH;
-		proximo.RegDest = 0;
+		proximo.RegDst = 0;
 		proximo.MemToReg = 0;
 		break;
 
@@ -175,103 +186,143 @@ Control ProximoEstadoControle(Control atual, int opcode, int func) {
 /*
  * Envia os resultados do controle para o pat
  */
-void AffectControle(Controle controle) {
-	AFFECT(IntToStr(current), "Clk",   "0");
-	AFFECT(IntToStr(current), "Reset", "0");
-
-	AFFECT(IntToStr(current), "MemToReg",    IntToStr(controle.MemToReg));
-	AFFECT(IntToStr(current), "IOrD",        IntToStr(controle.IOrD));
-	AFFECT(IntToStr(current), "PCSource",    IntToStr(controle.PCSource));
-	AFFECT(IntToStr(current), "RegDest",     IntToStr(controle.RegDest));
-	AFFECT(IntToStr(current), "ALUOp",       IntToStr(controle.AluOp));
-	AFFECT(IntToStr(current), "ALUSrcA",     IntToStr(controle.AluSrcA));
-	AFFECT(IntToStr(current), "ALUSrcB",     IntToStr(controle.AluSrcB));
-	AFFECT(IntToStr(current), "ALUCtrl",     IntToStr(controle.AluCtrl));
-	AFFECT(IntToStr(current), "PCWrite",     IntToStr(controle.PCWrite));
-	AFFECT(IntToStr(current), "PCWriteCond", IntToStr(controle.PCWriteCond));
-	AFFECT(IntToStr(current), "IRWrite",     IntToStr(controle.IRWrite));
-	AFFECT(IntToStr(current), "MemWrite",    IntToStr(controle.MemWrite));
-	AFFECT(IntToStr(current), "MemRead",     IntToStr(controle.MemRead));
-	current += ATRASO;
+void AffectControl(Control controle) {
+	SAFFECT(current, "MemToReg",    controle.MemToReg);
+	SAFFECT(current, "IOrD",        controle.IOrD);
+	SAFFECT(current, "PCSrc",       controle.PCSrc);
+	SAFFECT(current, "RegDst",      controle.RegDst);
+	SAFFECT(current, "AluOp",       controle.AluOp);
+	SAFFECT(current, "AluSrcA",     controle.AluSrcA);
+	SAFFECT(current, "AluSrcB",     controle.AluSrcB);
+	SAFFECT(current, "ALUCtrl",     controle.AluCtrl);
+	SAFFECT(current, "PCWrite",     controle.PCWrite);
+	SAFFECT(current, "IRWrite",     controle.IRWrite);
+	SAFFECT(current, "RegWrite",    controle.RegWrite);
+	SAFFECT(current, "MemWrite",    controle.MemWrite);
+	SAFFECT(current, "Branch",      controle.Branch);
 }
 
-Controle ResetControle() {
-	Controle controle = { 0 };
+Control ResetControl() {
+	Control controle = { 0 };
+	controle.State = CONTROL_FETCH;
 	controle.AluSrcB = 1;
 	controle.IRWrite = 1;
 	controle.PCWrite = 1;
 
-	AFFECT(IntToStr(current), "Clk",   "0");
-	AFFECT(IntToStr(current), "Reset", "1");
+	SAFFECT(current, "Clk", 0);
+	SAFFECT(current, "Reset", 1);
+	AffectControl(controle);
+	LABEL("Reset");
+	
 	current += ATRASO;
-
-	AFFECT(IntToStr(current), "Clk", "1");
-	AffectControle(controle, CONTROL_FETCH, 0);
+	SAFFECT(current, "Reset", 0);
 
 	return controle;
 }
 
-void main() {
+// Printa o nome do estado atual do controle
+void PrintControlState(ControlState atual) {
+	#define P(x) do { LABEL(x); printf("Estado: %s\n", x); } while(0);
+
+	switch (atual) {
+	case CONTROL_FETCH:         P("FETCH");         break;
+	case CONTROL_DECODE:        P("DECODE");        break;
+	case CONTROL_MEMADDR:       P("MEMADDR");       break;
+	case CONTROL_MEMREAD:       P("MEMREAD");       break;
+	case CONTROL_MEMWRITE:      P("MEMWRITE");      break;
+	case CONTROL_EXECUTE:       P("EXECUTE");       break;
+	case CONTROL_ALUWRITEBACK:  P("ALUWRITEBACK");  break;
+	case CONTROL_BRANCH:        P("BRANCH");        break;
+	case CONTROL_ADDIEXECUTE:   P("ADDIEXECUTE");   break;
+	case CONTROL_ADDIWRITEBACK: P("ADDIWRITEBACK"); break;
+	case CONTROL_JUMP:          P("JUMP");          break;
+	}
+	
+	#undef P
+}
+
+int main() {
 	DEF_GENPAT("control");
 
 	// Entrada
 	DECLAR("Clk",       ":1", "B", IN,  "", "");
 	DECLAR("Reset",     ":1", "B", IN,  "", "");
 
+	DECLAR("OPCode",     ":1", "X", IN,  "(6 downto 0)", "");
+	DECLAR("Funct",      ":1", "X", IN,  "(5 downto 0)", "");
+	
 	DECLAR("MemToReg",  ":1", "B", OUT, "", "");
 	DECLAR("RegDst",    ":1", "B", OUT, "", "");
-	DECLAR("IorD",      ":1", "B", OUT, "", "");
-	DECLAR("PCSrc",     ":1", "B", OUT, "(1 downto 0)", "");
-	DECLAR("ALUOP",     ":1", "B", OUT, "(1 downto 0)", "");
-	DECLAR("ALUSrcA",   ":1", "B", OUT, "", "");
-	DECLAR("ALUSrcB",   ":1", "B", OUT, "(1 downto 0)", "");
-	DECLAR("ALUCtrl",   ":1", "B", OUT, "(2 downto 0)", "");
+	DECLAR("IOrD",      ":1", "B", OUT, "", "");
+	DECLAR("PCSrc",     ":1", "X", OUT, "(1 downto 0)", "");
+	DECLAR("AluOP",     ":1", "X", OUT, "(1 downto 0)", "");
+	DECLAR("AluSrcA",   ":1", "B", OUT, "", "");
+	DECLAR("AluSrcB",   ":1", "X", OUT, "(1 downto 0)", "");
+	DECLAR("ALUCtrl",   ":1", "X", OUT, "(2 downto 0)", "");
 
 	DECLAR("IRWrite",   ":1", "B", OUT, "", "");
 	DECLAR("MemWrite",  ":1", "B", OUT, "", "");
 	DECLAR("PCWrite",   ":1", "B", OUT, "", "");
 	DECLAR("RegWrite",  ":1", "B", OUT, "", "");
-	DECLAR("Branch",    ":1", "B", OUT, "");
-
-	DECLAR("OPCode",    ":1", "B", IN,  "(6 downto 0)", "");
-	DECLAR("Funct",     ":1", "B", IN,  "(6 downto 0)",
-	DECLAR("State",     ":1", "B", IN,  "(3 downto 0)", "");
+	DECLAR("Branch",    ":1", "B", OUT, "", "");
 
 	// Misc
 	DECLAR("vdd", ":1", "B", IN, "", "");
 	DECLAR("vss", ":1", "B", IN, "", "");
-	AFFECT("0", "vdd", "1");
-	AFFECT("0", "vss", "0");
+	SAFFECT(0, "vdd", 1);
+	SAFFECT(0, "vss", 0);
 
-	Controle controle = ResetControle();
+	SAFFECT(0, "Clk", 0);
+	SAFFECT(0, "Reset", 0);
+	SAFFECT(0, "OPCode", 0);
+	SAFFECT(0, "Funct", 0);
 
-	// Programa:
-	unsigned int programa[] = {
-		0b100011000000000000000000000000000,
-		0b101011000000000000000000000000000,
-		0b000000000000000000000000000100000,
-		0b000100000000000000000000000100001,
-		0b001001000000000000000000000000000,
-		0b000010000000000000000000000000000,
+	Control control = ResetControl();
+
+	/*
+	 * Conjunto de instruções para testar a Unidade de Controle
+	 */
+	const struct {
+		unsigned OPCode;
+		unsigned Funct;
+	} programa[] = {
+		{ 0, 36 }, // Adição              (OP 0, Funct 36)
+		{ 0, 37 }, // Subtração           (OP 0, Funct 37)
+		{ 2, 0  }, // Pulo incondicional  (OP 2)
+		{ 35, 0 }, // Leitura da memória  (OP 35)
+		{ 43, 0 }, // Escrita na memória  (OP 43)
 	};
 
-	// Começa a rodar o programa
-	for (int i = 0; i < sizeof programa; i++) {
-		const struct {
-			unsigned int i;
-			union {
-				struct {
-					unsigned funct : 6
-					unsigned shamt : 6 
-				} R;
-			}
-		} instruction = programa[i];
-		const unsigned op =
+	#define SIZE(x) (sizeof(x)/sizeof(x[0]))
 
-		ProximoEstadoControle
+	// Inicia a máquina de estados e a mantem rodando até as instruções
+	// acabarem
+	int instruction, funct, i = 0;
+	while (1) {
+		if (control.State == CONTROL_FETCH) {
+			instruction = programa[i].OPCode;
+			funct       = programa[i].Funct;
+			i++;
+			
+			if (i > SIZE(programa))
+				break;	
+		}
+		
+		
+		SAFFECT(current, "Clk", 0);
+		SAFFECT(current, "OPCode", instruction);
+		SAFFECT(current, "Funct", funct);
+		current += ATRASO;
+	
+		SAFFECT(current, "Clk", 1);
+		ControlState state = control.State;
+		
+		control = NextControlState(control, instruction, funct);
+		AffectControl(control);
+		PrintControlState(state);
+		current += ATRASO;
 	}
-	// Executa o programa e testa se as entradas estão em ordem;
+	
+	SAV_GENPAT();
+	return 0;
 }
-
-
-#endif // CONTROL_STATE_H

@@ -29,14 +29,14 @@ int main(void) {
 	// Entrada
 	DECLAR("Clk",         ":1", "B", IN,   "", "");
 	DECLAR("WriteEnable", ":1", "B", IN, "", "");
-	DECLAR("A1",          ":1", "B", IN, "(4 downto 0)", "");
-	DECLAR("A2",          ":1", "B", IN, "(4 downto 0)", "");
-	DECLAR("A3",          ":1", "B", IN, "(4 downto 0)", "");
-	DECLAR("Data",        ":1", "B", IN, "(31 downto 0)", "");
+	DECLAR("A1",          ":1", "X", IN, "(4 downto 0)", "");
+	DECLAR("A2",          ":1", "X", IN, "(4 downto 0)", "");
+	DECLAR("A3",          ":1", "X", IN, "(4 downto 0)", "");
+	DECLAR("Data",        ":1", "X", IN, "(31 downto 0)", "");
 
 	// Saídas
-	DECLAR("RD1", ":1", "B", OUT,   "(31 downto 0)", "");
-	DECLAR("RD2", ":1", "B", OUT,   "(31 downto 0)", "");
+	DECLAR("RD1", ":1", "X", OUT,   "(31 downto 0)", "");
+	DECLAR("RD2", ":1", "X", OUT,   "(31 downto 0)", "");
 
 	// Misc
 	DECLAR("vdd", ":1", "B", IN, "", "");
@@ -45,35 +45,43 @@ int main(void) {
 	AFFECT("0", "vss", "0");
 
 	/*
-	 * Inicia os testes. Itera os valores de teste para cada variável e verifica
-	 * se a saída está como esperado
+	 * Escreve valores diferentes na memória e depois checa se foram escritos
+	 * corretamente
 	 */
 	const int valoresDeTeste[] = {
 		0x00000000, 0xFFFFFFFF, 0xAABBCCDD,
 		0x01010101, 0xCCCCCCCC, 0x77777777,
 	 	0x88888888, 0x10101010 };
-
-	int registradores[32];
-	for (int d = 0; d < sizeof valoresDeTeste; d++)
-	for (int a = 0; a < 31; a++)
-	for (int we = 0; we <= 1; we++) {
-		int rd1, rd2;
-
-		RegFile(registradores, a, a, a, we, valoresDeTeste[d], 1, 0, &rd1, &rd2);
-
-		AFFECT(inttostr(current), "Clk", "0");
-		AFFECT(inttostr(current), "A1", IntToStr(a));
-		AFFECT(inttostr(current), "A2", IntToStr(a));
-		AFFECT(inttostr(current), "A3", IntToStr(a));
-		AFFECT(inttostr(current), "Data", IntToStr(valoresDeTeste[d]));
-		AFFECT(inttostr(current), "WriteEnable", IntToStr(we))
+	 	
+	#define SIZE(x) (sizeof(x)/sizeof(x[0]))
+	
+	/*
+	 * Escreve valores na memória
+	 */
+	for (int i = 0; i < 31; i++) {
+		SAFFECT(current, "Clk", 0);
+		SAFFECT(current, "A1", 0);
+		SAFFECT(current, "A2", 0);
+		SAFFECT(current, "A3", i);
+		SAFFECT(current, "Data", valoresDeTeste[i % SIZE(valoresDeTeste)]);
+		SAFFECT(current, "WriteEnable", 1);
 		current += ATRASO;
-
-		AFFECT(inttostr(current), "Clk", "1");
+		
+		SAFFECT(current, "Clk", 1);
 		current += ATRASO;
+	}
 
-		AFFECT(inttostr(current), "RD1", IntToStr(rd1));
-		AFFECT(inttostr(current), "RD2", IntToStr(rd2));
+	SAFFECT(current, "WriteEnable", 0);
+	SAFFECT(current, "Clk", 0);
+
+	/*
+	 * Verifica RD1 e RD2
+	 */
+	for (int i = 0; i < 31; i++) {
+		SAFFECT(current, "A1", i);
+		SAFFECT(current, "A2", i);
+		SAFFECT(current, "RD1", valoresDeTeste[i % SIZE(valoresDeTeste)]);
+		SAFFECT(current, "RD2", valoresDeTeste[i % SIZE(valoresDeTeste)]);
 		current += ATRASO;
 	}
 
