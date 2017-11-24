@@ -1,0 +1,6 @@
+test/*.pat
+work/*.vbe
+work/*.vst
+work/*.vhdl
+work/*.pat
+work/result

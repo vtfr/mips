@@ -15,7 +15,7 @@ all: test
 
 # Limpa os arquivos residuais
 clear:
-	rm -f test/*.pat work/catalog work/*.{vbe,vhdl,vst,pat}
+	rm -f test/*.pat work/*.{vbe,vhdl,vst,pat}
 
 # Test roda a suite de testes
 test: work
@@ -23,8 +23,7 @@ test: work
 
 # Gera o ambiente de trabalho
 work: clear genpat
-	cp etc/catalog work \
-	&& cp src/vhdl/*.vhdl work \
+	cp src/vhdl/*.vhdl work \
 	&& cp test/*.pat work
 
 # Compila os genpats
